@@ -23,19 +23,19 @@
 #### Aims:
 **Develop some functions and models in favor of Deep Learning**
 - Visualization:
-attention
-matrix
-training loss
-positional encoding 
-other experience data
+attention;
+matrix;
+training loss;
+positional encoding; 
+other experience data;
 - vpn:
 access github, huggingface and so on
 - Datasets and Dataloaders:
-download functions
-data processor
-visualization of datasets structure
+download functions;
+data processor;
+visualization of datasets structure;
 - Custom models:
-benchmarks
+benchmarks;
 - Custom functions:
-novel postional encoding, novel data integrating, novel attentions
+novel postional encoding, novel data integrating, novel attentions;
 - not over...
