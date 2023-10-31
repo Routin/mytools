@@ -92,22 +92,24 @@ class DynamicLossPlotter:
 '''
 # def plot_losses(loss_data_dict) 使用示例
 # 这些数据通常会从数据文件中读取，这里只是为了演示
-loss_data_1 = [0.9, 0.8, 0.7, 0.6, 0.5]
-loss_data_2 = [0.95, 0.85, 0.75, 0.65, 0.55]
-loss_data_3 = [0.92, 0.82, 0.72, 0.62, 0.52]
 
-loss_data_dict = {
-    'Model 1': loss_data_1,
-    'Model 2': loss_data_2,
-    'Model 3': loss_data_3,
-}
-
-plot_losses(loss_data_dict)
 '''
 def plot_losses(loss_data_dict):
     """
     绘制多个loss曲线。
     :param loss_data_dict: 一个字典，其中键是标签（用于图例）和值是loss值的列表。
+
+    使用示例：
+    loss_data_1 = [0.9, 0.8, 0.7, 0.6, 0.5]
+    loss_data_2 = [0.95, 0.85, 0.75, 0.65, 0.55]
+    loss_data_3 = [0.92, 0.82, 0.72, 0.62, 0.52]
+
+    loss_data_dict = {
+        'Model 1': loss_data_1,
+        'Model 2': loss_data_2,
+        'Model 3': loss_data_3,
+    }
+    plot_losses(loss_data_dict)
     """
     plt.figure()
     
