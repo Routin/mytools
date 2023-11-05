@@ -89,11 +89,7 @@ class DynamicLossPlotter:
     def close(self):
         plt.close(self.fig)
 
-'''
-# def plot_losses(loss_data_dict) 使用示例
-# 这些数据通常会从数据文件中读取，这里只是为了演示
-
-'''
+# 绘制多个loss曲线
 def plot_losses(loss_data_dict):
     """
     绘制多个loss曲线。
