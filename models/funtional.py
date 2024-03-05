@@ -1,91 +1,73 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import math
 
 class PositionalEncoding(nn.Module):
-    def __init__(self, d_model, max_seq_len=512):
+    def __init__(self, d_model, max_len=5000):
         super(PositionalEncoding, self).__init__()
-        self.dropout = nn.Dropout(p=0.1)
 
-        # 计算位置编码
-        pe = torch.zeros(max_seq_len, d_model)
-        position = torch.arange(0, max_seq_len, dtype=torch.float32).unsqueeze(1)
-        div_term = torch.exp(torch.arange(0, d_model, 2, dtype=torch.float32) * (-math.log(10000.0) / d_model))
+        # 创建一个足够长的位置编码
+        pe = torch.zeros(max_len, d_model)
+        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
+        
         pe[:, 0::2] = torch.sin(position * div_term)
         pe[:, 1::2] = torch.cos(position * div_term)
-        pe = pe.unsqueeze(0).transpose(0, 1)
 
+        pe = pe.unsqueeze(0).transpose(0, 1)
+        # 注册为常量，不需要梯度
         self.register_buffer('pe', pe)
 
     def forward(self, x):
+        # 将位置编码添加到输入的嵌入中
         x = x + self.pe[:x.size(0), :]
-        return self.dropout(x)
+        return x
 
+class RoPEPositionalEncoding(nn.Module):
+    
+    def __init__(self, d_model, max_len=512):
+        super().__init__()
+        self.d_model = d_model
+        self.max_len = max_len
+        cos_pos = []
+        sin_pos = []
+        for i in range(max_len):
+            cos_pos.append(self.cos_m_theta(i,d_model))
+            sin_pos.append(self.sin_m_theta(i,d_model))
 
-class RotaryPositionEmbedding(nn.Module):
-    """Rotary Position Embedding (RoPE)模块
-    
-    该模块根据给定的序列长度和模型维度，生成对应的RoPE编码。
-    
-    Args:
-        dim (int): 模型维度，即每个token的特征数。
-        max_seq_len (int, optional): 最大序列长度，默认为512。
-    """
-    
-    def __init__(self, dim, max_seq_len=512):
-        super(RotaryPositionEmbedding, self).__init__()
-        # 计算频率
-        self.dim = dim
-        inv_freq = 1.0 / (10000 ** (torch.arange(0, dim, 2).float() / dim))
-        self.register_buffer('inv_freq', inv_freq)
-        self.max_seq_len = max_seq_len
-    
-    def forward(self, positions, batch_first=True):
-        """
-        Args:
-            positions (torch.Tensor): 位置索引的张量，大小为 [batch_size, seq_len] 或 [seq_len, batch_size]。
-            batch_first (bool, optional): 如果为True，输入输出的张量形状为[batch_size, seq_len, dim]，
-                                          否则为[seq_len, batch_size, dim]。默认为True。
-        
-        Returns:
-            torch.Tensor: 经过RoPE编码后的张量。
-        """
-        seq_len = positions.size(1) if batch_first else positions.size(0)
-        positions = positions.view(-1)  # 展平位置信息以便计算
-        
-        # 创建维度上的位置编码
-        sinusoid_inp = torch.ger(positions, self.inv_freq)
-        pos_emb = torch.cat((sinusoid_inp.sin(), sinusoid_inp.cos()), dim=-1)
-        
-        # 重塑为原始的维度
-        if batch_first:
-            pos_emb = pos_emb.view(-1, seq_len, self.dim)
-        else:
-            pos_emb = pos_emb.view(seq_len, -1, self.dim)
-        
-        return pos_emb
+        print(len(cos_pos))
+        self.cos_pos = torch.stack(cos_pos)
+        self.sin_pos = torch.stack(sin_pos)
 
-def apply_rotary_pos_emb(x, sin_cos_emb):
-    """应用RoPE编码到特征上。
-    
-    Args:
-        x (torch.Tensor): 输入特征张量，形状为 [batch_size, seq_len, dim] 或 [seq_len, batch_size, dim]。
-        sin_cos_emb (torch.Tensor): 由RoPE模块生成的编码张量，形状需与输入特征匹配。
-    
-    Returns:
-        torch.Tensor: 应用了RoPE编码的特征张量。
-    """
-    half_dim = sin_cos_emb.shape[-1] // 2
-    sin_emb = sin_cos_emb[..., :half_dim]
-    cos_emb = sin_cos_emb[..., half_dim:]
-    
-    # 将sin和cos编码应用到特征上
-    x_cos = x * cos_emb
-    x_sin = torch.roll(x, shifts=1, dims=-1) * sin_emb
-    return x_cos + x_sin
-        
+    def forward(self, input):
+        # input_shape = (B, N, D)
+        new_input = torch.zeros_like(input)
+        B = input.shape[0]
 
+        cos_pos = self.cos_pos.unsqueeze(0)
+        cos_pos = cos_pos.repeat(B,1,1)
+        sin_pos = self.sin_pos.unsqueeze(0)
+        sin_pos = sin_pos.repeat(B,1,1)
+        # 对于张量的最后一个维度，我们要交换奇数和偶数索引位置的元素并改变符号
+        # 偶数索引位置（从0开始计数），在新张量中对应的是奇数索引位置
+        new_input[..., 1::2] = input[..., :-1:2]
+
+        # 奇数索引位置，在新张量中对应的是偶数索引位置
+        new_input[..., 0::2] = -input[..., 1::2]
         
-    
-    
+        out = input*cos_pos+new_input*sin_pos
+        return out
+
+    def cos_m_theta(self,m,d_model):
+        cos_tensor = torch.ones(d_model)
+        for i in range(len(cos_tensor)):
+            cos_tensor[i] = math.cos(m*self.theta(i))
+        return cos_tensor
+    def sin_m_theta(self,m,d_model):
+        sin_tensor = torch.ones(d_model)
+        for i in range(len(sin_tensor)):
+            sin_tensor[i] = math.sin(m*self.theta(i))
+        return sin_tensor
+
+    def theta(self,t):
+        return 10000**(-2*t/self.d_model)
